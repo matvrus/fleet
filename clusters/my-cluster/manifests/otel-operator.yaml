@@ -1,0 +1,11 @@
+apiVersion: otel.operator.openshift.io/v1alpha1
+kind: OpenTelemetry
+metadata:
+  name: otel-operator
+spec:
+  mode: install
+  tags:
+    - fluentbit
+    - prometheus
+    - loki
+    - tempo
