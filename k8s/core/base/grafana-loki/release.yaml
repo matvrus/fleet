@@ -1,0 +1,101 @@
+
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: loki-distributed
+spec:
+  chart:
+    spec:
+      chart: loki-distributed
+      interval: 1m
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+      version: ">=0.66.4"
+  interval: 5m
+  values:
+    fullnameOverride: loki
+    loki:
+      structuredConfig:
+        ingester:
+          chunk_idle_period: 1h
+          chunk_target_size: 1536000
+          max_chunk_age: 1h
+          max_transfer_retries: 0
+        limits_config:
+          max_global_streams_per_user: 5000
+          max_query_length: 0h
+          max_query_parallelism: 32
+          max_query_series: 11000
+          max_streams_per_user: 0
+        ruler:
+          remote_write:
+            client:
+              url: http://grafana-mimir-nginx.grafana-mimir.svc.cluster.local/api/v1/push
+            enabled: true
+          rule_path: /tmp/loki/rules
+          storage:
+            local:
+              directory: /etc/loki/rules
+            type: local
+          wal:
+            dir: /tmp/loki/ruler-wal
+        schema_config:
+          configs:
+          - from: "2022-12-02"
+            index:
+              period: 24h
+              prefix: loki_index_
+            object_store: aws
+            schema: v11
+            store: boltdb-shipper
+        server:
+          grpc_server_max_concurrent_streams: 1000
+          grpc_server_max_recv_msg_size: 104857600
+          grpc_server_max_send_msg_size: 104857600
+        storage_config:
+          filesystem:
+            directory: /tmp/loki/data
+          boltdb_shipper:
+            shared_store: aws
+    ruler:
+      directories:
+        fake:
+          rules.yaml: |
+            groups:
+              - name: should_fire
+                rules:
+                  - alert: HighPercentageError
+                    expr: |
+                      sum(rate({app="foo", env="production"} |= "error" [5m])) by (job)
+                        /
+                      sum(rate({app="foo", env="production"}[5m])) by (job)
+                        > 0.05
+                    for: 10m
+                    labels:
+                        severity: page
+                    annotations:
+                        summary: High request latency
+              - name: credentials_leak
+                rules: 
+                  - alert: http-credentials-leaked
+                    annotations: 
+                      message: "{{ $labels.job }} is leaking http basic auth credentials."
+                    expr: 'sum by (cluster, job, pod) (count_over_time({namespace="prod"} |~ "http(s?)://(\\w+):(\\w+)@" [5m]) > 0)'
+                    for: 10m
+                    labels: 
+                      severity: critical
+      enabled: true
+      extraVolumeMounts:
+      - mountPath: /rules
+        name: loki-rules-generated
+      extraVolumes:
+        name: loki-rules-generated
+    serviceAccount:
+      create: true
+      name: grafana-loki
+    serviceMonitor:
+      enabled: true
+      labels:
+        instance: primary
