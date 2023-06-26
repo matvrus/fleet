@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
 - gotk-components.yaml
 - gotk-sync.yaml
+- loki-config.yaml=config/grafana-loki-config.yaml
