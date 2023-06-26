@@ -7,4 +7,9 @@ data:
     auth_enabled: false
     server:
       http_listen_port: 3100
+configMapGenerator:
+- name: grafana-loki-config
+  files:
+  - config/grafana-loki-config.yaml
+  namespace: flux-system
 
